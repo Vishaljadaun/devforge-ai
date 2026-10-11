@@ -76,3 +76,27 @@ export const practiceLabs:Record<string,PracticeLab>={
     ]
   }
 };
+
+/** v0.6 Phase 1: two correct answers for the existing three-question labs. */
+export function requiredPracticeScore(topicId:string):number|null{
+  const lab=practiceLabs[topicId];
+  if(!lab||lab.questions.length===0)return null;
+  return lab.questions.length===3?2:Math.ceil(lab.questions.length*0.8);
+}
+
+export type PracticeScoreSummary={bestScore:number;total:number};
+export function hasPassedPractice(topicId:string,result:PracticeScoreSummary|undefined|null):boolean{
+  const lab=practiceLabs[topicId];
+  const required=requiredPracticeScore(topicId);
+  return !!lab && required!==null && !!result && result.total===lab.questions.length &&
+    Number.isInteger(result.bestScore) && result.bestScore>=required && result.bestScore<=result.total;
+}
+
+/** Remove prior manually checked gated completions and recognize previously passed quizzes. */
+export function reconcileCompletedTopics(
+  completed:readonly string[],results:Record<string,PracticeScoreSummary|undefined>
+):string[]{
+  const eligible=new Set(completed.filter(id=>requiredPracticeScore(id)===null||hasPassedPractice(id,results[id])));
+  for(const id of Object.keys(practiceLabs))if(hasPassedPractice(id,results[id]))eligible.add(id);
+  return [...eligible];
+}

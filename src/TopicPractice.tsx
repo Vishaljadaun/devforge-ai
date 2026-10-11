@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {BookOpenCheck,CheckCircle2,Code2,RotateCcw} from 'lucide-react';
-import {practiceLabs} from './data/practice';
+import {practiceLabs,requiredPracticeScore} from './data/practice';
 import type {PracticeQuestion} from './data/practice';
 import './topic-practice.css';
 
@@ -18,18 +18,21 @@ export default function TopicPractice({topicId,previous,onSubmit}:Props){
   if(!lab)return null;
   const allAnswered=lab.questions.every(q=>Number.isInteger(answers[q.id]));
   const score=scorePractice(lab.questions,answers);
-  return <section className="practice-lab" aria-label={`Interactive practice: ${lab.title}`}>
+  const passingScore=requiredPracticeScore(topicId)??lab.questions.length;
+  const passed=score>=passingScore;
+  return <section id="topic-practice-lab" className="practice-lab" aria-label={`Interactive practice: ${lab.title}`}>
     <div className="practice-eyebrow"><Code2 size={16}/> INTERACTIVE PRACTICE LAB</div>
     <h3>{lab.title}</h3>
     <p className="practice-goal">{lab.goal}</p>
     <h4>Why it matters</h4>
     <ul>{lab.concepts.map(c=><li key={c}>{c}</li>)}</ul>
+    <p className="practice-gate-rule"><strong>Completion rule:</strong> Earn at least {passingScore}/{lab.questions.length} correct answers to complete this topic. Retakes are unlimited.</p>
     <h4>Set up on your computer</h4><p>{lab.setup}</p>
     <pre className="code-pane"><code>{lab.starter}</code></pre>
     <h4>Build it yourself</h4><p>{lab.task}</p>
     <div className="practice-verify"><BookOpenCheck size={18}/><p><strong>Definition of done:</strong> {lab.verify}</p></div>
     <p className="practice-disclaimer">Code runs in your local Python environment, not in this browser. The quiz checks understanding; it does not execute or grade your code.</p>
-    <div className="practice-check-heading"><h4>Knowledge check</h4>{previous&&<span>Best: {previous.bestScore}/{previous.total} · {previous.attempts} attempt(s)</span>}</div>
+    <div className="practice-check-heading"><h4>Knowledge check</h4>{previous&&<span>Best: {previous.bestScore}/{previous.total} · {previous.attempts} attempt(s){previous.bestScore>=passingScore&&previous.total===lab.questions.length?' · Passed':''}</span>}</div>
     {lab.questions.map((question,index)=><fieldset className="practice-question" key={question.id}>
       <legend>{index+1}. {question.prompt}</legend>
       {question.choices.map((choice,i)=><label key={i} className={`practice-answer ${submitted&&i===question.correct?'correct':''} ${submitted&&answers[question.id]===i&&i!==question.correct?'incorrect':''}`}>
@@ -38,7 +41,7 @@ export default function TopicPractice({topicId,previous,onSubmit}:Props){
       {submitted&&<p className="practice-explanation"><CheckCircle2 size={16}/>{question.explanation}</p>}
     </fieldset>)}
     <div className="practice-actions">
-      {submitted?<><strong role="status">Score: {score}/{lab.questions.length} ({Math.round(score/lab.questions.length*100)}%)</strong><button className="btn btn-outline" onClick={()=>{setAnswers({});setSubmitted(false)}}><RotateCcw size={15}/> Try again</button></>
+      {submitted?<><strong role="status" className={passed?'practice-passed':'practice-not-passed'}>{passed?'Passed — topic complete!':'Not passed — try again.'} Score: {score}/{lab.questions.length} ({Math.round(score/lab.questions.length*100)}%)</strong><button className="btn btn-outline" onClick={()=>{setAnswers({});setSubmitted(false)}}><RotateCcw size={15}/> Try again</button></>
       :<button className="btn btn-primary" disabled={!allAnswered} onClick={()=>{setSubmitted(true);onSubmit(score,lab.questions.length)}}>Check answers</button>}
     </div>
     {!allAnswered&&!submitted&&<p className="practice-hint">Answer every question to check your work.</p>}
