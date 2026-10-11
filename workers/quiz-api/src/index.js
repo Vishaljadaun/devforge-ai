@@ -6,7 +6,7 @@ async function who(e,a){if(!a?.startsWith("Bearer "))return null;const r=await f
 const valid=q=>Array.isArray(q)&&q.length===5&&new Set(q.map(x=>x.id)).size===5&&q.every(x=>x&&typeof x.id==="string"&&typeof x.prompt==="string"&&x.prompt.length>=15&&Array.isArray(x.choices)&&x.choices.length===4&&x.choices.every(s=>typeof s==="string")&&new Set(x.choices).size===4&&Number.isInteger(x.correct)&&x.correct>=0&&x.correct<4&&typeof x.explanation==="string"&&x.explanation.length>10);
 async function generate(e,title,level){
  const result=await e.AI.run("@cf/meta/llama-3.1-8b-instruct",{messages:[{role:"system",content:"Generate accurate technical quiz questions. JSON only."},{role:"user",content:"Create exactly 5 distinct "+level+" level multiple-choice questions about "+title+". Return JSON object with questions array. Each question: id q1 through q5, prompt, choices (4 strings), correct (zero-based answer index), explanation. No markdown."}],max_tokens:1800,temperature:0.4});
- let raw=String(result.response||"").trim();if(raw.startsWith("~~~"))raw=raw.slice(3).replace(/^json/,"").replace(/~~~$/,"").trim();
+ let raw=String(result.response||"").trim();const fence=String.fromCharCode(96).repeat(3);if(raw.startsWith(fence))raw=raw.slice(3).replace(/^json\s*/i,"").replace(new RegExp("\\s*"+fence+"$"),"").trim();
  const items=JSON.parse(raw).questions;if(!valid(items))throw Error("Invalid AI content");return items;
 }
 const add=(e,t,data)=>db(e,t,"POST",data);
