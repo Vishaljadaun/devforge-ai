@@ -31,7 +31,8 @@ test('quiz explains every answer and requires all questions answered',()=>{
 
 test('topic practice results persist via existing user workspace and import/export path',()=>{
   assert.match(app,/topicPracticeResults:Record<string,PracticeResult>/);
-  assert.match(app,/topicPracticeResults:d\.topicPracticeResults/);
+  assert.match(app,/const topicPracticeResults=d\.topicPracticeResults/);
+  assert.match(app,/doneTopics:reconcileCompletedTopics\(recordedTopics,topicPracticeResults\)/);
   assert.match(app,/topicPracticeResults:\{\.\.\.w\.topicPracticeResults/);
   assert.match(app,/<TopicPractice key=\{activeTopic\}/);
   assert.match(app,/Math\.max\(prior\?\.bestScore\?\?0,score\)/);
