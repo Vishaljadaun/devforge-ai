@@ -15,3 +15,6 @@ venv/
 *.sqlite3
 
 *.tsbuildinfo
+
+# Local Ollama quiz drafts; may contain unreviewed questions
+quiz-drafts/
