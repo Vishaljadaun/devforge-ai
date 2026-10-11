@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
 const read=f=>readFileSync(f,'utf8');
 const sql=read('supabase/ai_quiz_bank.sql');
 const worker=read('workers/quiz-api/src/index.js');
@@ -41,4 +42,8 @@ test('topic UI has three difficulties, source fallback and local authoring',()=>
  assert.match(draft,/api\/generate/);
  assert.match(draft,/status:'draft'/);
  assert.match(topics,/rows.length!==323/);
+});
+
+test('Cloudflare Worker parses as JavaScript',()=>{
+ assert.doesNotThrow(()=>execFileSync(process.execPath,['--check','workers/quiz-api/src/index.js'],{stdio:'pipe'}));
 });
