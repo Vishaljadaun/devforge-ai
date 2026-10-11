@@ -1,0 +1,12 @@
+{
+  "name": "devforge-ai-quiz",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://vishalk.great-site.net"
+  }
+}
