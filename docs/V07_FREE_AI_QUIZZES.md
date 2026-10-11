@@ -64,6 +64,16 @@ node scripts/ollama-quiz-bank.mjs --topic python:0 --level medium
 ```
 This creates `quiz-drafts/python-0-medium.json`. Inspect/edit each question, distractor, answer index and explanation. Do **not** blindly approve LLM output or ingest all drafts. Import reviewed JSON via a privileged SQL Editor INSERT into `ai_quiz_bank` with source `ollama` and status `approved` only when independently verified.
 
+To generate multiple drafts for a module with a local model, use `node scripts/ollama-bulk.mjs --module python --level all --max 10` (this example creates up to ten individual draft sets).
+
+After **independently checking every answer**, convert an approved draft into a SQL statement using:
+
+```sh
+node scripts/approved-quiz-sql.mjs quiz-drafts/python-0-medium.json --reviewed > approved.sql
+```
+
+Inspect `approved.sql` and execute it through Supabase SQL Editor with privileged credentials; review/approval is a human action, not automated fact checking. No service key is needed for these local scripts.
+
 Do not store or commit learner PII or tokens in draft files. Local Ollama costs no paid AI inference API fees, but requires CPU/GPU resources and electricity. Model licenses vary.
 
 ## Known limitations
