@@ -10,6 +10,8 @@ import type {Project} from './data/projects';
 import {flashcards,quiz} from './data/revision';
 import {lessons as starterLessons} from './data/lessons';
 import type {Lesson} from './data/lessons';
+import TopicPractice from './TopicPractice';
+import type {PracticeResult} from './TopicPractice';
 const AdminPanel=lazy(()=>import('./AdminPanel'));
 const AdminInsights=lazy(()=>import('./AdminInsights'));
 
@@ -18,12 +20,12 @@ type CloudRow={id:string;kind:'lesson'|'project';payload:Record<string,unknown>;
 type Rating='again'|'hard'|'good'|'easy';
 type Review={due:number;interval:number;repetitions:number};
 type JournalEntry={id:string;date:string;title:string;content:string};
-type Workspace={doneTopics:string[];bookmarks:string[];doneSteps:Record<string,number[]>;topicNotes:Record<string,string>;journal:JournalEntry[];reviews:Record<string,Review>;quizHistory:{date:string;score:number;total:number}[];};
+type Workspace={doneTopics:string[];bookmarks:string[];doneSteps:Record<string,number[]>;topicNotes:Record<string,string>;journal:JournalEntry[];reviews:Record<string,Review>;quizHistory:{date:string;score:number;total:number}[];topicPracticeResults:Record<string,PracticeResult>};
 const STORAGE='devforge_workspace_v1';
-const empty:Workspace={doneTopics:[],bookmarks:[],doneSteps:{},topicNotes:{},journal:[],reviews:{},quizHistory:[]};
+const empty:Workspace={doneTopics:[],bookmarks:[],doneSteps:{},topicNotes:{},journal:[],reviews:{},quizHistory:[],topicPracticeResults:{}};
 function normalize(data:unknown):Workspace{
   const d=(data && typeof data==='object'?data:{}) as Partial<Workspace>;
-  return {doneTopics:Array.isArray(d.doneTopics)?d.doneTopics.filter(x=>typeof x==='string'):[],bookmarks:Array.isArray(d.bookmarks)?d.bookmarks.filter(x=>typeof x==='string'):[],doneSteps:d.doneSteps && typeof d.doneSteps==='object'?d.doneSteps:{},topicNotes:d.topicNotes && typeof d.topicNotes==='object'?d.topicNotes:{},journal:Array.isArray(d.journal)?d.journal:[],reviews:d.reviews && typeof d.reviews==='object'?d.reviews:{},quizHistory:Array.isArray(d.quizHistory)?d.quizHistory:[]};
+  return {doneTopics:Array.isArray(d.doneTopics)?d.doneTopics.filter(x=>typeof x==='string'):[],bookmarks:Array.isArray(d.bookmarks)?d.bookmarks.filter(x=>typeof x==='string'):[],doneSteps:d.doneSteps && typeof d.doneSteps==='object'?d.doneSteps:{},topicNotes:d.topicNotes && typeof d.topicNotes==='object'?d.topicNotes:{},journal:Array.isArray(d.journal)?d.journal:[],reviews:d.reviews && typeof d.reviews==='object'?d.reviews:{},quizHistory:Array.isArray(d.quizHistory)?d.quizHistory:[],topicPracticeResults:d.topicPracticeResults&&typeof d.topicPracticeResults==='object'&&!Array.isArray(d.topicPracticeResults)?d.topicPracticeResults:{}};
 }
 function loadLocal():Workspace{try{return normalize(JSON.parse(localStorage.getItem(STORAGE)||'{}'));}catch{return {...empty};}}
 const url=import.meta.env.VITE_SUPABASE_URL as string|undefined;
@@ -145,9 +147,21 @@ function App(){
   const openModule=(id:string)=>{setActiveModule(id);setView('roadmap');setActiveProject(null);setActiveTopic(null);setSidebarOpen(false);window.scrollTo(0,0)};
   const openProject=(id:string)=>{setActiveProject(id);setView('projects');setActiveModule(null);setActiveTopic(null);setSidebarOpen(false);window.scrollTo(0,0)};
   const changeView=(v:View)=>{setView(v);setActiveModule(null);setActiveProject(null);setActiveTopic(null);setSidebarOpen(false);setQuery('');window.scrollTo(0,0)};
-  const markTopic=(id:string)=>setWs(w=>({...w,doneTopics:w.doneTopics.includes(id)?w.doneTopics.filter(x=>x!==id):[...w.doneTopics,id]}));
+  // Only a deliberate learning action creates an event. Logins and automatic cloud saves do not.
+  const trackActivity=(event_type:'topic_completed'|'project_step_completed'|'quiz_completed'|'practice_submitted'|'journal_saved'|'flashcard_reviewed',event_ref?:string)=>{
+    if(!supabase||!user||!cloudReady)return;
+    void supabase.from('learner_activity').insert({user_id:user.id,event_type,event_ref:event_ref||null})
+      .then(({error})=>{if(error&&import.meta.env.DEV)console.warn('Learning event could not be saved:',error.message)});
+  };
+  const markTopic=(id:string)=>{if(!ws.doneTopics.includes(id))trackActivity('topic_completed',id);setWs(w=>({...w,doneTopics:w.doneTopics.includes(id)?w.doneTopics.filter(x=>x!==id):[...w.doneTopics,id]}));};
   const markBookmark=(id:string)=>setWs(w=>({...w,bookmarks:w.bookmarks.includes(id)?w.bookmarks.filter(x=>x!==id):[...w.bookmarks,id]}));
-  const markStep=(id:string,index:number)=>setWs(w=>({...w,doneSteps:{...w.doneSteps,[id]:(w.doneSteps[id]||[]).includes(index)?(w.doneSteps[id]||[]).filter(x=>x!==index):[...(w.doneSteps[id]||[]),index]}}));
+  const markStep=(id:string,index:number)=>{if(!(ws.doneSteps[id]||[]).includes(index))trackActivity('project_step_completed',id);setWs(w=>({...w,doneSteps:{...w.doneSteps,[id]:(w.doneSteps[id]||[]).includes(index)?(w.doneSteps[id]||[]).filter(x=>x!==index):[...(w.doneSteps[id]||[]),index]}}));};
+  const savePractice=(id:string,score:number,total:number)=>{
+    setWs(w=>{const prior=w.topicPracticeResults[id];return {...w,topicPracticeResults:{...w.topicPracticeResults,[id]:{
+      bestScore:Math.max(prior?.bestScore??0,score),latestScore:score,total,attempts:(prior?.attempts??0)+1,lastAttemptAt:new Date().toISOString()
+    }}}});
+    trackActivity('practice_submitted',id);
+  };
   const review=(rating:Rating)=>{
     if(!currentCard)return;
     const prev=ws.reviews[currentCard.id]||{due:0,interval:0,repetitions:0};
@@ -156,12 +170,13 @@ function App(){
     setWs(w=>({...w,reviews:{...w.reviews,[currentCard.id]:{due:Date.now()+hours*3600000,interval,repetitions:prev.repetitions+1}}}));
     setReviewRevealed(false);
     setReviewIndex(0);
+    trackActivity('flashcard_reviewed',currentCard.id);
   };
-  const submitQuiz=()=>{if(Object.keys(quizAnswers).length!==quiz.length){notify('Answer every question before submitting.');return;}const score=quiz.filter(q=>quizAnswers[q.id]===q.correct).length;setQuizResult(score);setWs(w=>({...w,quizHistory:[{date:today(),score,total:quiz.length},...w.quizHistory].slice(0,50)}))};
+  const submitQuiz=()=>{if(Object.keys(quizAnswers).length!==quiz.length){notify('Answer every question before submitting.');return;}const score=quiz.filter(q=>quizAnswers[q.id]===q.correct).length;setQuizResult(score);setWs(w=>({...w,quizHistory:[{date:today(),score,total:quiz.length},...w.quizHistory].slice(0,50)}));trackActivity('quiz_completed')};
   const saveJournal=()=>{
     if(!newJournalTitle.trim() || !newJournalContent.trim()){notify('Add a title and a learning note.');return;}
     setWs(w=>({...w,journal:editingJournalId?w.journal.map(j=>j.id===editingJournalId?{...j,title:newJournalTitle.trim(),content:newJournalContent.trim()}:j):[{id:randomId(),date:today(),title:newJournalTitle.trim(),content:newJournalContent.trim()},...w.journal]}));
-    setNewJournalTitle('');setNewJournalContent('');setEditingJournalId(null);notify('Learning note saved.');
+    setNewJournalTitle('');setNewJournalContent('');setEditingJournalId(null);notify('Learning note saved.');trackActivity('journal_saved');
   };
   const exportData=()=>{const blob=new Blob([JSON.stringify({format:'devforge-workspace-v1',exportedAt:new Date().toISOString(),workspace:ws},null,2)],{type:'application/json'});const ref=URL.createObjectURL(blob);const a=document.createElement('a');a.href=ref;a.download=`devforge-learning-backup-${today()}.json`;a.click();URL.revokeObjectURL(ref);notify('Backup exported.')};
   const importData=async(file:File)=>{try{const incoming=JSON.parse(await file.text());if(file.size>5_000_000 || incoming.format!=='devforge-workspace-v1' || !incoming.workspace)throw Error('Invalid backup');setWs(normalize(incoming.workspace));notify('Backup imported. Previous progress has been replaced.')}catch{notify('Invalid DevForge backup file.')}};
@@ -210,6 +225,7 @@ function App(){
       </div>
     </main>
     {activeTopic&&(()=>{const t=getTopic(activeTopic);if(!t)return null;const m=modules.find(m=>m.id===t.moduleId)!;const lesson=lessons[activeTopic];return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setActiveTopic(null)}}><div className="topic-modal" role="dialog" aria-modal="true" aria-label="Topic details"><div className="modal-bar"><div><span className="overline">{m.phase} / {m.title}</span><h2>{t.title}</h2></div><button className="icon-button" aria-label="Close topic" onClick={()=>setActiveTopic(null)}><X size={20}/></button></div><div className="topic-modal-scroll">{lesson?<><span className="lesson-badge"><BookOpenCheck size={15}/> FULL GUIDED STARTER LESSON</span><p className="lesson-lede">{lesson.intro}</p><h3>Core ideas</h3><ul className="lesson-list">{lesson.keyPoints.map((item,i)=><li key={i}>{item}</li>)}</ul><h3>Code / implementation sketch</h3><pre className="code-pane"><code>{lesson.example}</code></pre><h3>Your hands-on task</h3><p>{lesson.task}</p><div className="think-box"><Lightbulb size={19}/><div><strong>Check your understanding</strong><p>{lesson.review}</p></div></div></>:<><span className="lesson-badge outline"><BookOpen size={15}/> TOPIC OUTLINE</span><p className="lesson-lede">This topic is part of <strong>{m.title}</strong>. Study the concept using the official references below, then implement it in the associated project lab.</p><h3>What to investigate</h3><ul className="lesson-list"><li>Explain the purpose and core terminology of “{t.title}” in your own words.</li><li>Find and implement a simple practical example.</li><li>Write a test or a short experiment demonstrating correct behavior.</li><li>Record a real-world tradeoff, failure mode or security consideration.</li></ul><div className="think-box"><Lightbulb size={19}/><div><strong>Module lab</strong><p>{m.lab}</p></div></div><h3>Reference material</h3><div className="lesson-resources">{m.resources.map(r=><a key={r.url} href={r.url} target="_blank" rel="noopener noreferrer">{r.title}<ExternalLink size={16}/></a>)}</div></>}
+        <TopicPractice key={activeTopic} topicId={activeTopic} previous={ws.topicPracticeResults[activeTopic]} onSubmit={(score,total)=>savePractice(activeTopic,score,total)}/>
         <h3>My revision notes</h3><textarea className="topic-notes" rows={5} value={ws.topicNotes[activeTopic]||''} onChange={e=>setWs(w=>({...w,topicNotes:{...w.topicNotes,[activeTopic]:e.target.value}}))} placeholder="Explain the idea, mistakes you faced, examples, and interview questions..."/><p className="autosave">Automatically saved {user&&cloudReady?'to your account and browser':'to this browser'}.</p></div><div className="topic-modal-footer"><button className={`btn btn-outline ${ws.bookmarks.includes(activeTopic)?'is-saved':''}`} onClick={()=>markBookmark(activeTopic)}><Bookmark size={16}/>{ws.bookmarks.includes(activeTopic)?'Bookmarked':'Bookmark'}</button><button className="btn btn-primary" onClick={()=>markTopic(activeTopic)}><Check size={16}/>{ws.doneTopics.includes(activeTopic)?'Mark incomplete':'Mark as learned'}</button></div></div></div>})()}
     {showAuth&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowAuth(false)}}><div className="auth-modal" role="dialog" aria-modal="true" aria-label="Sign in"><button className="icon-button auth-close" onClick={()=>setShowAuth(false)} aria-label="Close"><X size={19}/></button><div className="auth-icon"><GraduationCap size={30}/></div><h2>Take your learning anywhere</h2><p>Continue with Google or GitHub to save progress, projects, revision history and notes between devices.</p>{user?<><strong className="auth-email">{user.email}</strong><button className="btn btn-outline block" onClick={()=>{void signOut();setShowAuth(false)}}>Sign out</button></>:supabase?<><div className="auth-social-buttons"><button className="auth-provider" onClick={()=>void signInWithProvider('github')}><Github size={21}/> Continue with GitHub</button><button className="auth-provider" onClick={()=>void signInWithProvider('google')}><span className="auth-google-g">G</span> Continue with Google</button></div><div className="auth-divider"><span>or use email (testing)</span></div><label>Your email address</label><input type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void requestLogin()}}/><button className="btn btn-primary block" onClick={requestLogin}>Send sign-in link <ArrowRight size={16}/></button><small>Magic Link requires verified SMTP for general users. Google and GitHub work independently of SMTP.</small></>:<div className="auth-warning"><Shield size={20}/><span>Cloud login is disabled until you add Supabase environment variables. You can continue learning in local mode.</span></div>}</div></div>}
     {toast&&<div className="toast" role="status"><CheckCircle size={18}/>{toast}<button onClick={()=>setToast('')} aria-label="Dismiss"><X size={16}/></button></div>}

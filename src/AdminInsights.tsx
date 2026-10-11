@@ -3,6 +3,7 @@ import type {SupabaseClient} from '@supabase/supabase-js';
 import {Activity,BookOpenCheck,ChartNoAxesColumn,FolderKanban,RefreshCw,ShieldCheck,Users} from 'lucide-react';
 import './admin-insights.css';
 import AdminLearners from './AdminLearners';
+import AdminEngagement from './AdminEngagement';
 
 type Signups={day:string;users:number};
 type Stats={
@@ -60,6 +61,7 @@ export default function AdminInsights({client}:{client:SupabaseClient}){
       </div>
       <div className="panel insights-privacy"><ShieldCheck size={22}/><div><h3>Privacy by design</h3><p>These statistics are aggregated inside PostgreSQL by an admin-checked function. Admins may view registered emails and topic-completion percentages, but cannot access learners' journal entries, notes or raw workspace records. The 7-day workspace number reflects writes, not a precise daily-active-user measurement.</p></div></div>
     </>}
+    <AdminEngagement client={client}/>
     <AdminLearners client={client}/>
   </section>;
 }
