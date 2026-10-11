@@ -50,7 +50,7 @@ test('activity RLS rejects identities other than auth.uid and never opens public
 
 test('admin engagement aggregate RPC checks admin before querying activity',()=>{
   const check=sql.indexOf('Admin access required');
-  const query=sql.indexOf('from public.learner_activity\n  where');
+  const query=sql.search(/from\s+public\.learner_activity\s+where\b/i);
   assert.ok(check>0&&query>check);
   assert.match(sql,/security definer set search_path = ''/i);
   assert.match(sql,/revoke all on function public\.admin_learning_engagement\(\) from public/i);
