@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {Activity,BookOpenCheck,ChartNoAxesColumn,FolderKanban,RefreshCw,ShieldCheck,Users} from 'lucide-react';
 import './admin-insights.css';
+import AdminLearners from './AdminLearners';
 
 type Signups={day:string;users:number};
 type Stats={
@@ -39,7 +40,7 @@ export default function AdminInsights({client}:{client:SupabaseClient}){
   useEffect(()=>{void load()},[client]);
   const max=Math.max(1,...(stats?.signup_series||[]).map(s=>s.users));
   return <section className="insights">
-    <div className="page-intro insights-header"><div><span className="overline">DEVFORGE AI · PLATFORM HEALTH</span><h1>Admin Analytics</h1><p>Measure learning-platform growth while keeping private learner notes and activity records inaccessible to other users.</p></div><button className="btn btn-outline" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Refresh</button></div>
+    <div className="page-intro insights-header"><div><span className="overline">DEVFORGE AI · PLATFORM HEALTH</span><h1>Admin Analytics</h1><p>Monitor growth and self-reported curriculum progress without accessing learners' private journals or notes.</p></div><button className="btn btn-outline" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Refresh</button></div>
     {loading&&<div className="panel insights-message" role="status">Loading platform statistics…</div>}
     {error&&<div className="panel insights-message" role="alert">{error}</div>}
     {stats&&!loading&&<>
@@ -57,8 +58,9 @@ export default function AdminInsights({client}:{client:SupabaseClient}){
           </div>)}
         </div>
       </div>
-      <div className="panel insights-privacy"><ShieldCheck size={22}/><div><h3>Privacy by design</h3><p>These statistics are aggregated inside PostgreSQL by an admin-checked function. The dashboard cannot browse other users' journals, notes, or progress records. The 7-day workspace number reflects writes, not a precise daily-active-user measurement.</p></div></div>
+      <div className="panel insights-privacy"><ShieldCheck size={22}/><div><h3>Privacy by design</h3><p>These statistics are aggregated inside PostgreSQL by an admin-checked function. Admins may view registered emails and topic-completion percentages, but cannot access learners' journal entries, notes or raw workspace records. The 7-day workspace number reflects writes, not a precise daily-active-user measurement.</p></div></div>
     </>}
+    <AdminLearners client={client}/>
   </section>;
 }
 
